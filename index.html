@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ระบบวิเคราะห์องค์ประกอบร่างกาย</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; background: #f8f9fa; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+        h1 { text-align: center; color: #6a1b9a; font-weight: 500; margin-bottom: 30px; }
+        .section-title { color: #6a1b9a; font-weight: 500; margin: 20px 0 15px; border-bottom: 2px solid #e1bee7; padding-bottom: 5px; }
+        .grid { display: grid; gap: 15px; grid-template-columns: repeat(3, 1fr); }
+        input, select { width: 100%; padding: 14px; border: 1px solid #e0e0e0; border-radius: 12px; font-size: 15px; box-sizing: border-box; }
+        button { width: 100%; padding: 16px; background: #6a1b9a; color: white; border: none; border-radius: 12px; font-size: 16px; cursor: pointer; transition: 0.3s; margin-top: 20px; }
+        button:hover { background: #4a148c; }
+        #report { margin-top: 40px; padding: 40px; border-radius: 20px; border: 1px solid #f0f0f0; display: none; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 25px; border-radius: 12px; overflow: hidden; border: 1px solid #eee; }
+        th { background: #f3e5f5; color: #4a148c; padding: 15px; }
+        td { padding: 15px; border-top: 1px solid #eee; text-align: center; }
+        @media print { .no-print { display: none; } #report { display: block !important; box-shadow: none; border: none; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="no-print">
+        <h1>ระบบวิเคราะห์องค์ประกอบร่างกาย</h1>
+        <div class="section-title">ข้อมูลพื้นฐาน</div>
+        <div class="grid">
+            <input type="date" id="checkDate">
+            <input type="number" id="age" placeholder="อายุ (ปี)">
+            <select id="gender"><option value="male">ชาย</option><option value="female">หญิง</option></select>
+        </div>
+        <div class="section-title">ข้อมูลองค์ประกอบร่างกาย</div>
+        <div class="grid">
+            <input type="number" id="weight" placeholder="น้ำหนัก (kg)">
+            <input type="number" id="height" placeholder="ส่วนสูง (cm)">
+            <input type="number" id="fat" placeholder="ไขมัน (%)">
+            <input type="number" id="visceral" placeholder="ไขมันช่องท้อง">
+            <input type="number" id="muscle" placeholder="กล้ามเนื้อ (%)">
+        </div>
+        <button onclick="generateReport()">คำนวณและวิเคราะห์ผล</button>
+    </div>
+
+    <div id="report">
+        <div style="text-align: center;">
+            <img src="414089.jpg" style="width: 120px; border-radius: 50%; margin-bottom: 15px;">
+            <h2 style="color: #6a1b9a;">รายงานผลการวิเคราะห์</h2>
+            <p id="infoDisplay" style="font-size: 16px;"></p>
+        </div>
+        <div style="width: 320px; margin: 20px auto;"><canvas id="radarChart"></canvas></div>
+        <div id="resultContent"></div>
+        <br>
+        <button class="no-print" style="background: #28a745;" onclick="window.print()">พิมพ์รายงาน A4</button>
+    </div>
+</div>
+
+<script>
+let myChart;
+function formatDate(d) { return d ? new Date(d).toLocaleDateString('th-TH', {year:'numeric', month:'long', day:'numeric'}) : "-"; }
+
+function getAnalysis(type, val, g) {
+    if (type === 'fat') {
+        const std = (g === 'male' ? "10.0-19.9" : "20.0-29.9");
+        if (val < 20) return { text: 'ต่ำ', color: '#fff9c4', std: std, note: 'ควรเพิ่มไขมันดี' };
+        if (val <= 29.9) return { text: 'ปกติ', color: '#c8e6c9', std: std, note: 'ดีเยี่ยม' };
+        if (val <= 34.5) return { text: 'เริ่มอ้วน', color: '#ffe0b2', std: std, note: 'ควรคุมอาหาร' };
+        return { text: 'อ้วน', color: '#ffcdd2', std: std, note: 'ปรึกษาแพทย์' };
+    }
+    if (type === 'visceral') {
+        if (val < 3) return { text: 'สมบูรณ์สูงสุด', color: '#1b5e20', textColor: 'white', std: '1.0-2.9', note: 'ดีมาก' };
+        if (val < 6) return { text: 'ปกติ', color: '#c8e6c9', std: '3.0-5.9', note: 'ปกติ' };
+        if (val < 11) return { text: 'ไขมันแทรกตับเล็กน้อย', color: '#ffcc80', std: '6.0-10.9', note: 'ควรลดแป้ง' };
+        if (val < 16) return { text: 'ไขมันแทรกตับอันตราย', color: '#ef5350', std: '11.0-15.9', note: 'อันตราย' };
+        return { text: 'ไขมันแทรกตับอันตรายมาก', color: '#000', textColor: 'white', std: '16.0+', note: 'พบแพทย์ด่วน' };
+    }
+    if (type === 'muscle') {
+        const std = (g === 'male' ? "32.9-35.7" : "25.9-27.9");
+        if (val < 26) return { text: 'ต่ำ', color: '#fff9c4', std: std, note: 'ควรเวทเทรนนิ่ง' };
+        if (val <= 28) return { text: 'ปกติ', color: '#c8e6c9', std: std, note: 'ดีมาก' };
+        return { text: 'เริ่มอ้วน/อ้วน', color: '#ffe0b2', std: std, note: 'เพิ่มคาร์ดิโอ' };
+    }
+    if (type === 'bmi') {
+        if (val < 18.5) return { text: 'ผอม', color: '#fff9c4', std: '18.5-22.9', note: 'ควรเพิ่มน้ำหนัก' };
+        if (val < 23) return { text: 'ปกติ', color: '#c8e6c9', std: '18.5-22.9', note: 'สุขภาพดี' };
+        if (val < 25) return { text: 'ท้วม/อ้วน ระดับ 1', color: '#ffe0b2', std: '18.5-22.9', note: 'ควบคุมน้ำหนัก' };
+        if (val < 30) return { text: 'อ้วน ระดับ 2', color: '#f8bbd0', std: '18.5-22.9', note: 'ลดน้ำหนักด่วน' };
+        return { text: 'อ้วนมาก ระดับ 3', color: '#ef5350', std: '18.5-22.9', note: 'พบแพทย์' };
+    }
+}
+
+function generateReport() {
+    const w = parseFloat(document.getElementById('weight').value);
+    const h = parseFloat(document.getElementById('height').value) / 100;
+    const bmi = (w / (h * h)).toFixed(1);
+    const g = document.getElementById('gender').value;
+    const fat = parseFloat(document.getElementById('fat').value);
+    const vis = parseFloat(document.getElementById('visceral').value);
+    const mus = parseFloat(document.getElementById('muscle').value);
+    
+    document.getElementById('infoDisplay').innerText = `อายุ: ${document.getElementById('age').value} ปี | วันที่ตรวจ: ${formatDate(document.getElementById('checkDate').value)}`;
+
+    const f = getAnalysis('fat', fat, g), v = getAnalysis('visceral', vis, g), m = getAnalysis('muscle', mus, g), b = getAnalysis('bmi', parseFloat(bmi), g);
+
+    document.getElementById('resultContent').innerHTML = `
+        <table>
+            <tr style="background:#e1bee7; color:#4a148c;"><th>รายการ</th><th>ค่าที่ได้</th><th>มาตรฐาน</th><th>แปลผล</th><th>คำแนะนำ</th></tr>
+            <tr><td>ไขมัน</td><td>${fat}%</td><td>${f.std}</td><td style="background:${f.color}">${f.text}</td><td>${f.note}</td></tr>
+            <tr><td>ไขมันช่องท้อง</td><td>${vis}</td><td>${v.std}</td><td style="background:${v.color}; color:${v.textColor||'black'}">${v.text}</td><td>${v.note}</td></tr>
+            <tr><td>มวลกล้ามเนื้อ</td><td>${mus}%</td><td>${m.std}</td><td style="background:${m.color}">${m.text}</td><td>${m.note}</td></tr>
+            <tr><td>BMI</td><td>${bmi}</td><td>${b.std}</td><td style="background:${b.color}">${b.text}</td><td>${b.note}</td></tr>
+        </table>`;
+    
+    document.getElementById('report').style.display = 'block';
+    if(myChart) myChart.destroy();
+    myChart = new Chart(document.getElementById('radarChart').getContext('2d'), {
+        type: 'radar',
+        data: { labels: ['ไขมัน', 'ไขมันช่องท้อง', 'กล้ามเนื้อ', 'BMI'], datasets: [{ label: 'คะแนนสุขภาพ', data: [((fat-5)/45)*100, ((vis-1)/29)*100, ((mus-5)/55)*100, ((bmi-15)/20)*100], backgroundColor: 'rgba(106, 27, 154, 0.2)', borderColor: '#6a1b9a' }] },
+        options: { scales: { r: { min: 0, max: 100 } } }
+    });
+}
+</script>
+</body>
+</html>
